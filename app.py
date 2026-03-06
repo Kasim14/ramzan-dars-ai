@@ -1,89 +1,123 @@
 import streamlit as st
-from notes_manager import save_note, load_notes
+from notes_manager import load_notes, add_note, update_note, delete_note
 from gemini_ai import ask_ai
 
-st.set_page_config(page_title="Ramzan Dars AI", layout="wide")
+st.set_page_config(page_title="Ramzan Dars AI", layout="centered")
 
-st.title("Ramzan Dars AI Assistant")
+# session states
+if "page" not in st.session_state:
+    st.session_state.page = "notes"
 
-menu = st.sidebar.radio(
-    "Menu",
-    ["Add Notes", "View Notes", "Ask AI"]
-)
+if "edit_index" not in st.session_state:
+    st.session_state.edit_index = None
 
-# ADD NOTES
-if menu == "Add Notes":
 
-    st.header("Add New Dars Notes")
+# ============================
+# NOTES PAGE
+# ============================
 
-    title = st.text_input("Dars Title")
+if st.session_state.page == "notes":
 
-    content = st.text_area("Write Notes")
-
-    if st.button("Save Notes"):
-
-        save_note(title, content)
-
-        st.success("Notes Saved!")
-
-# VIEW NOTES
-elif menu == "View Notes":
-
-    st.header("Saved Notes")
+    st.title("Ramzan Dars Notes")
 
     notes = load_notes()
 
-    for n in notes:
+    for i, n in enumerate(notes):
 
-        with st.expander(n["title"]):
+        col1, col2 = st.columns([8,1])
 
-            st.write(n["content"])
+        with col1:
+            with st.expander(n["title"]):
+                st.write(n["content"])
 
-# ASK AI
-elif menu == "Ask AI":
+        with col2:
 
-    st.header("Ask AI From Notes")
+            if st.button("⋮", key=f"menu{i}"):
+
+                st.session_state.edit_index = i
+                st.session_state.page = "options"
+                st.rerun()
+
+
+    # floating add button
+    if st.button("➕ Add Note"):
+        st.session_state.page = "editor"
+        st.session_state.edit_index = None
+        st.rerun()
+
+
+
+# ============================
+# NOTE EDITOR
+# ============================
+
+elif st.session_state.page == "editor":
+
+    st.title("Write Note")
 
     notes = load_notes()
 
-    titles = [n["title"] for n in notes]
+    title = ""
+    content = ""
 
-    # session state for question
-    if "question" not in st.session_state:
-        st.session_state.question = ""
+    if st.session_state.edit_index is not None:
 
-    with st.form("ask_ai_form"):
+        note = notes[st.session_state.edit_index]
+        title = note["title"]
+        content = note["content"]
 
-        selected = st.multiselect("Select Dars", titles)
+    title = st.text_input("Title", value=title)
+    content = st.text_area("Notes", value=content, height=300)
 
-        question = st.text_input(
-            "Ask Question",
-            value=st.session_state.question
-        )
+    col1, col2 = st.columns(2)
 
-        submit = st.form_submit_button("Ask AI")
+    with col1:
+        if st.button("✔ Save"):
 
-    # store question in session
-    st.session_state.question = question
+            if st.session_state.edit_index is None:
+                add_note(title, content)
+            else:
+                update_note(st.session_state.edit_index, title, content)
 
-    if submit:
+            st.session_state.page = "notes"
+            st.rerun()
 
-        selected_notes = ""
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.page = "notes"
+            st.rerun()
 
-        for n in notes:
-            if n["title"] in selected:
-                selected_notes += n["content"] + "\n"
 
-        if not selected:
-            st.warning("Please select at least one Dars")
 
-        elif question.strip() == "":
-            st.warning("Please enter a question")
+# ============================
+# OPTIONS MENU
+# ============================
 
-        else:
+elif st.session_state.page == "options":
 
-            answer = ask_ai(selected_notes, question)
+    st.title("Note Options")
 
-            st.subheader("AI Answer")
+    i = st.session_state.edit_index
+    notes = load_notes()
 
-            st.write(answer)
+    st.write(notes[i]["title"])
+
+    if st.button("✏ Edit"):
+        st.session_state.page = "editor"
+        st.rerun()
+
+    if st.button("🗑 Delete"):
+        delete_note(i)
+        st.session_state.page = "notes"
+        st.rerun()
+
+    new_name = st.text_input("Rename")
+
+    if st.button("Rename"):
+        update_note(i, new_name, notes[i]["content"])
+        st.session_state.page = "notes"
+        st.rerun()
+
+    if st.button("Back"):
+        st.session_state.page = "notes"
+        st.rerun()
